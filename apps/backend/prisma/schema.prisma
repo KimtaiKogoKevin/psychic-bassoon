@@ -1,0 +1,37 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js" // Specifies that Prisma Client for JavaScript/TypeScript should be generated
+}
+
+datasource db {
+  provider = "postgresql"         // Specifies the database provider
+  url      = env("DATABASE_URL") // Tells Prisma to get the connection string from the DATABASE_URL environment variable
+}
+
+// Model for B2B Users
+model User {
+  id                String    @id @default(cuid()) // Primary key, automatically generated CUID
+  email             String    @unique             // User's email, must be unique
+  passwordHash      String                      // Stores the hashed password (NEVER store plain text passwords)
+  firstName         String?                     // Optional: User's first name (String? means it can be null)
+  lastName          String?                     // Optional: User's last name
+  companyName       String?                     // Optional: User's company name
+  shopifyCustomerId String?   @unique             // Optional: To link to a Shopify Customer record if synced
+  role              UserRole  @default(BUYER)     // User's role, defaults to BUYER (see enum below)
+  isApproved        Boolean   @default(false)     // Flag for B2B account approval workflow
+  approvedAt        DateTime?                   // Timestamp when the account was approved
+  createdAt         DateTime  @default(now())     // Timestamp when the user record was created
+  updatedAt         DateTime  @updatedAt          // Timestamp when the user record was last updated (auto-managed by Prisma)
+
+  // Optional: If you want the actual table in the database to be named 'users' instead of 'User'
+  // @@map("users")
+}
+
+// Enumeration for User Roles
+enum UserRole {
+  BUYER // Standard wholesale buyer
+  ADMIN // Admin user for managing the B2B portal itself
+  // You can add more roles later, e.g., MANAGER, SALES_REP
+}
