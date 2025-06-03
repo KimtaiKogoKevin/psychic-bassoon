@@ -11,7 +11,12 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev:frontend": "npm run dev -w apps/frontend",
-    "dev:backend": "npm run dev -w apps/backend"
+    "dev:backend": "npm run dev -w apps/backend",
+    "build:frontend": "npm run build -w apps/frontend",
+    "build:backend": "npm run build -w apps/backend",
+    "prisma:init:backend": "npm exec -w apps/backend -- prisma init --datasource-provider postgresql",
+    "prisma:migrate:dev:backend": "npm exec -w apps/backend -- prisma migrate dev",
+    "prisma:generate:backend": "npm exec -w apps/backend -- prisma generate"
   },
   "keywords": [],
   "author": "",
