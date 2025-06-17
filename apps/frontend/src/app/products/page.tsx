@@ -109,9 +109,9 @@ export default async function ProductsPage() {
                       parseFloat(product.priceRange.minVariantPrice.amount)
                     )}
                   </p>
-                  {/* Optional: Display tags for debugging
+                  
                    <p className="text-xs text-muted-foreground mt-1">Tags: {product.tags.join(', ')}</p>
-                  */}
+                  
                 </CardContent>
               </Card>
             </Link>
