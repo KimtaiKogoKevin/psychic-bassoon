@@ -6,8 +6,9 @@ import { notFound } from "next/navigation";
 import type { Metadata, ResolvingMetadata } from "next";
 
 // --- CONFIGURATION ---
-// IMPORTANT: Adjust this to your actual B2B tag(s)!!!
-const B2B_TAG_FILTER_PART = "tag:B2B";
+// This is used to construct the Shopify search query string for verification.
+// Example: "tag:wholesale" or "tag:b2b" or "(tag:wholesale OR tag:b2b)"
+const B2B_PRODUCT_VERIFICATION_QUERY_PART = "(tag:B2B)"; // <--- !!! ADJUST TO YOUR FULL B2B TAG QUERY !!!
 
 // --- GRAPHQL QUERY ---
 const GET_PRODUCT_BY_HANDLE_QUERY = `
@@ -85,11 +86,17 @@ interface GetProductResponse {
 
 type ProductPageProps = {
   params: { productHandle: string };
-  // searchParams?: { [key: string]: string | string[] | undefined }; // If you use searchParams
 };
 
 // --- HELPER FUNCTIONS ---
 const formatPrice = (money: ShopifyMoney): string => {
+  if (
+    !money ||
+    typeof money.amount === "undefined" ||
+    typeof money.currencyCode === "undefined"
+  ) {
+    return "Price unavailable";
+  }
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: money.currencyCode,
@@ -98,15 +105,13 @@ const formatPrice = (money: ShopifyMoney): string => {
 
 // --- METADATA GENERATION ---
 export async function generateMetadata(
-  { params }: ProductPageProps,
+  props: ProductPageProps, // Use 'props'
   parent: ResolvingMetadata
 ): Promise<Metadata> {
-  const productHandle = params.productHandle;
+  const productHandle = props.params.productHandle; // Access via props.params
 
-  // For dynamic metadata, you might fetch minimal product data here
-  // For simplicity now, we'll derive from handle or use a generic title
-  // const productTitle = await getProductTitle(productHandle); // Example async fetch
-
+  // Minimal fetch for title for metadata to avoid full product fetch if possible
+  // Or derive a generic title
   const pageTitle = productHandle
     .split("-")
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
@@ -114,14 +119,17 @@ export async function generateMetadata(
 
   return {
     title: `${pageTitle} | Wholesale Portal`,
-    // description: `Details for wholesale product: ${pageTitle}`, // Could fetch actual description
+    // description: `Details for wholesale product: ${pageTitle}`,
   };
 }
 
 // --- PAGE COMPONENT ---
-export default async function ProductDetailPage({ params }: ProductPageProps) {
-  const { productHandle } = params;
-  const b2bVerificationQueryString = `handle:${productHandle} AND (${B2B_TAG_FILTER_PART})`;
+export default async function ProductDetailPage(props: ProductPageProps) {
+  // Use 'props'
+  const productHandle = props.params.productHandle; // Access via props.params
+
+  // Construct the verification query using the product handle and the B2B tag query part
+  const b2bVerificationQueryString = `handle:${productHandle} AND ${B2B_PRODUCT_VERIFICATION_QUERY_PART}`;
 
   const shopifyResponse = await shopifyFetch<GetProductResponse>({
     query: GET_PRODUCT_BY_HANDLE_QUERY,
@@ -148,7 +156,7 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
 
   if (!isB2BProduct) {
     console.warn(
-      `Product Detail Page: Product '${productHandle}' (ID: ${product.id}) found but is not a B2B product or verification failed. b2bVerifiedProduct data:`,
+      `Product Detail Page: Product '${productHandle}' (ID: ${product.id}) found but is not a B2B product or verification failed. Verification query: "${b2bVerificationQueryString}". Verified product data:`,
       shopifyResponse.data?.b2bVerifiedProduct
     );
     notFound();
@@ -157,10 +165,7 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
   return (
     <div className="container mx-auto py-8 px-4 md:px-6">
       <div className="grid md:grid-cols-2 gap-8 lg:gap-12 items-start">
-        {/* Product Image Section */}
         <div className="sticky top-24 self-start">
-          {" "}
-          {/* For sticky image on scroll */}
           {product.featuredImage?.url ? (
             <div className="aspect-square relative bg-muted rounded-lg overflow-hidden shadow-lg">
               <Image
@@ -168,7 +173,7 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
                 alt={product.featuredImage.altText || product.title}
                 fill
                 className="object-cover"
-                priority // Good for Largest Contentful Paint (LCP)
+                priority
                 sizes="(max-width: 768px) 100vw, 50vw"
               />
             </div>
@@ -177,10 +182,8 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
               No Image Available
             </div>
           )}
-          {/* TODO: Implement an image gallery for multiple product images if product.media is available */}
         </div>
 
-        {/* Product Details Section */}
         <div>
           {product.vendor && (
             <p className="text-sm text-muted-foreground mb-2">
@@ -193,22 +196,19 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
 
           <p className="text-2xl font-semibold text-primary mb-6">
             {formatPrice(product.priceRange.minVariantPrice)}
-            {/* Display range if min and max prices are different */}
             {product.priceRange.minVariantPrice.amount !==
               product.priceRange.maxVariantPrice.amount &&
-              product.priceRange.maxVariantPrice && // Ensure maxVariantPrice exists
+              product.priceRange.maxVariantPrice &&
               ` - ${formatPrice(product.priceRange.maxVariantPrice)}`}
           </p>
 
           {product.descriptionHtml && (
             <div
-              // Ensure you have @tailwindcss/typography installed and configured for 'prose' classes
               className="prose prose-sm dark:prose-invert max-w-none mb-6 text-foreground"
               dangerouslySetInnerHTML={{ __html: product.descriptionHtml }}
             />
           )}
 
-          {/* Variant Selection Placeholder/Display */}
           {product.options &&
             product.options.length > 0 &&
             product.options.some(
@@ -217,7 +217,6 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
             ) && (
               <div className="space-y-4 mb-6">
                 {product.options.map((option) => {
-                  // Only render option if it's not the default "Title" option with a single default value
                   if (
                     option.name.toLowerCase() === "title" &&
                     option.values.length <= 1 &&
@@ -238,8 +237,6 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
                             size="sm"
                             disabled
                           >
-                            {" "}
-                            {/* TODO: Implement variant selection logic */}
                             {value}
                           </Button>
                         ))}
@@ -250,12 +247,10 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
               </div>
             )}
 
-          {/* Add to cart button (functionality to be implemented in a later phase) */}
           <Button size="lg" className="w-full mt-6" disabled>
-            Add to  Cart
+            Add to B2B Cart
           </Button>
 
-          {/* Optional: Display Tags for debugging or info */}
           {product.tags && product.tags.length > 0 && (
             <p className="text-xs text-muted-foreground mt-4">
               Tags: {product.tags.join(", ")}
@@ -263,29 +258,15 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
           )}
         </div>
       </div>
-
-      {/* Placeholder for related products, etc. */}
-      {/* <div className="mt-16">
-        <h2 className="text-2xl font-bold mb-6">Related Products</h2>
-        {/* ... Related products component ... * / }
-      </div> */}
     </div>
   );
 }
 
-// Optional: generateStaticParams for pre-rendering B2B product pages at build time
+// Optional: generateStaticParams for pre-rendering
 // export async function generateStaticParams() {
-//   // Ensure B2B_TAG_FILTER_PART is defined correctly above
 //   const shopifyResponse = await shopifyFetch<{ products: { edges: Array<{ node: { handle: string } }> } }>({
-//     query: `query GetB2BProductHandles { products(first: 250, query: "${B2B_TAG_FILTER_PART}") { edges { node { handle } } } }`
+//     query: `query GetB2BProductHandles { products(first: 250, query: "${B2B_PRODUCT_VERIFICATION_QUERY_PART}") { edges { node { handle } } } }`
 //   });
-
-//   if (shopifyResponse.errors || !shopifyResponse.data?.products) {
-//     console.error("generateStaticParams: Failed to fetch B2B product handles", shopifyResponse.errors);
-//     return [];
-//   }
-
-//   return shopifyResponse.data.products.edges.map(edge => ({
-//     productHandle: edge.node.handle
-//   }));
+//   if (shopifyResponse.errors || !shopifyResponse.data?.products) { return []; }
+//   return shopifyResponse.data.products.edges.map(edge => ({ productHandle: edge.node.handle }));
 // }
