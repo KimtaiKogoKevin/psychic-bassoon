@@ -14,7 +14,7 @@ import type { Metadata, ResolvingMetadata } from "next";
 // --- CONFIGURATION ---
 // IMPORTANT: This should be JUST THE TAG VALUE, e.g., "wholesale" or "b2b"
 // This will be used in the ProductFilter for products within the collection.
-const B2B_TAG_VALUE_FOR_FILTER = "tag:B2B"; // <--- !!! ADJUST TO YOUR ACTUAL B2B TAG VALUE !!!
+const B2B_TAG_VALUE_FOR_FILTER = "B2B"; // <--- !!! ADJUST TO YOUR ACTUAL B2B TAG VALUE !!!
 
 // --- GRAPHQL QUERY (Corrected for filters argument) ---
 const GET_COLLECTION_WITH_B2B_PRODUCTS_QUERY = `
@@ -89,10 +89,11 @@ const formatPrice = (money: ShopifyMoney): string => {
 
 // --- METADATA GENERATION ---
 export async function generateMetadata(
-  props: CollectionPageProps, // Use 'props'
+  propsPromise: Promise<CollectionPageProps>,
   parent: ResolvingMetadata
 ): Promise<Metadata> {
-  const collectionHandle = props.params.collectionHandle; // Access via props.params
+  const props = await propsPromise;
+  const collectionHandle = props.params.collectionHandle;
 
   const pageTitle = collectionHandle
     .split("-")
@@ -105,9 +106,11 @@ export async function generateMetadata(
 }
 
 // --- PAGE COMPONENT ---
-export default async function CollectionDetailPage(props: CollectionPageProps) {
-  // Use 'props'
-  const collectionHandle = props.params.collectionHandle; // Access via props.params
+export default async function CollectionDetailPage(
+  propsPromise: Promise<CollectionPageProps>
+) {
+  const props = await propsPromise;
+  const collectionHandle = props.params.collectionHandle;
 
   // Construct the product filter for products within this collection
   const productFiltersForCollection = [{ tag: B2B_TAG_VALUE_FOR_FILTER }];
@@ -134,7 +137,10 @@ export default async function CollectionDetailPage(props: CollectionPageProps) {
     notFound();
   }
 
-  const products = collection.products.edges.map((edge) => edge.node);
+  // Filter products on the client as a safeguard in case Shopify's filter is not strict
+  const products = collection.products.edges
+    .map((edge) => edge.node)
+    .filter((product) => product.tags.includes(B2B_TAG_VALUE_FOR_FILTER));
 
   return (
     <div>
